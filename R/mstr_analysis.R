@@ -1,16 +1,31 @@
 
-LoadMstrFile <- function(filename, filepath) {
+LoadMstrFile <- function(fname, fpath) {
   require(stringr)
-  len_fpath <-str_length(filepath)
-  fpath_final_char <- str_sub(filepath, len_fpath - 1, len_fpath)
+  require(readxl)
+
+  len_fpath <- str_length(fpath)
+  fpath_final_char <- str_sub(fpath, len_fpath - 1, len_fpath)
   if (!fpath_final_char == "/") {
-    filepath <- str_c(filepath, "/")
+    fpath <- str_c(fpath, "/")
   }
 
-  full_file_path <- str_c(filepath, filename)
+  full_file_path <- str_c(fpath, fname)
 
-  mstr_data <- read.xlsx(full_file_path)
+  mstr_data <- read_xlsx(full_file_path)
 
   return(mstr_data)
+}
+
+JoinEMRToDataset <- function(df, dept_number_col_name) {
+  require(readxl,
+          dplyr)
+  emr_lookup_df <- read_xlsx("./Src/TableEMRDept.xlsx",
+                             skip = 1) %>%
+    select(`Dept Number`, EMROrg)
+  names(emr_lookup_df) <- c(dept_number_col_name,
+                            "EMROrg")
+  df <- left_join(df, emr_lookup_df)
+
+  return(df)
 }
 
