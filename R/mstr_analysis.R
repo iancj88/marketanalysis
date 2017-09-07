@@ -29,3 +29,31 @@ JoinEMRToDataset <- function(df, dept_number_col_name) {
   return(df)
 }
 
+AdjustSalaries <- function(df,
+                           sal_col_name         = "FY FTE SALARY w/LONGEVITY",
+                           med_ratio_col_name   = "LONG SALARY/MARKET",
+                           med_market_col_name  = "MARKET COMP",
+                           ignore.aux.res.funds = TRUE,
+                           ratio_threshold      = .75,
+                           total_expend         = 500000) {
+
+  n_ee_below_thresh <- sum(df[, med_ratio_col_name] < ratio_threshold)
+  ee_rows_below_thresh <- df[,sal_col_name] < ratio_threshold
+
+  # equal 'flat' distribution of funds to all those below
+  # the threshold
+  flat_adjust_amnt <- total_expend / n_ee_below_thresh
+
+  # set the adjust_amnt depending on the raise distribution scheme
+  raise_amnt <- flat_adjust_amnt
+
+  # add the raise and recompute ratio
+  df$raise_amnt[!ee_rows_below_thresh] <- 0
+  df$raise_amnt[ee_rows_below_thresh] <- adjust_amnt
+
+  df$new_salary <- df$raise_amnt + df[, sal_col_name]
+  df$new_ratio <- df$new_salary / df[, med_market_col_name]
+
+}
+
+
