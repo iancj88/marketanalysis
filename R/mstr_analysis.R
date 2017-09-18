@@ -49,11 +49,12 @@ AdjustSalaries <- function(df,
 
   # add the raise and recompute ratio
   df$raise_amnt[!ee_rows_below_thresh] <- 0
-  df$raise_amnt[ee_rows_below_thresh] <- adjust_amnt
+  df$raise_amnt[ee_rows_below_thresh] <- raise_amnt
 
   df$new_salary <- df$raise_amnt + df[, sal_col_name]
   df$new_ratio <- df$new_salary / df[, med_market_col_name]
 
+  return(df)
 }
 
 
