@@ -1,5 +1,7 @@
 pacman::p_load(readxl,
-               stringr)
+               stringr,
+               dplyr,
+               ggplot2)
 
 #############################################################################
 # Constants
@@ -175,7 +177,7 @@ mstr_job_info <- select(mstr_data, # Job specific info
                         COLLEGE,
                         DIVISION,
                         JOB_START_DATE,
-                        JOB_END_DATE,sun
+                        JOB_END_DATE,
                         CATEGORY,
                         JOB_STATUS,
                         POSN,
@@ -225,6 +227,168 @@ new_fail_bool <-
   mstr_data_updt$comp_ratio <= low_ratio_threshold
 new_fail <- mstr_data_updt[new_fail_bool, ]
 
-mstr_data_analysis <- group_by(mstr_data_updt, POSITION_TITLE)
-View(mstr_data_updt)
+mstr_join <- select(mstr_data,
+                    -`MARKET COMP`,
+                    -`LONG SALARY/MARKET`,
+                    -`Market Bin (0.1)`,
+                    -`Market Bin (0.25)`,
+                    -`Market Bin (0.25) Reference`,
+                    -`Market Bin (0.1) Reference`,
+                    -starts_with("Alt"),
+                    -starts_with("Adjustment"),
+                    -`3000`,
+                    -`2500`,
+                    -`2000`,
+                    -`1500`,
+                    -`1000`,
+                    -`500`,
+                    -`0`,
+                    -JCAT_UPDT,
+                    -SOC_UPDT,
+                    -CUPA_UPDT,
+                    -contains("JCAT_SOC"),
+                    -contains("JCAT_CUPA"),
+                    -`IMPERFECT MATCH`,
+                    -SOC_BLS,
+                    -CUPA,
+                    -contains("_HRBP"))
 
+updt_join <- select(mstr_data_updt,
+                    -PIDM,
+                    -ID,
+                    -POSN,
+                    -CATEGORY,
+                    -`FY FTE SALARY w/LONGEVITY`,
+                    -`SEARCH REGION GENERAL`,
+                    -`SEARCH REGION SPECIFIC`)
+
+final_output <- left_join(x = mstr_join,
+                          y = updt_join,
+                          by = c("KEY" = "KEY"))
+
+# Clean the position titles in the final output
+#
+
+position_title_lu <- read_xlsx("./Src/position_title_cleanup.xlsx")
+final_output <- left_join(final_output,
+                          position_title_lu,
+                          by = c("POSITION_TITLE" = "Position Title Old")) %>% select(-POSITION_TITLE)
+
+
+ histogram_data <- select(final_output,
+                          Position_Title_Cln,
+                          comp_ratio,
+                          `FY FTE SALARY w/LONGEVITY`) %>%
+   left_join(unique_position_cnts,
+             by = c("Position_Title_Cln" = "Position_Title_Cln")) %>%
+   filter(n >= 10) %>%
+   group_by(Position_Title_Cln)
+
+ hist_posn_ratio <- ggplot(data = histogram_data,
+                           mapping = aes(comp_ratio)) +
+   geom_histogram(binwidth = .1) +
+   facet_wrap(~Position_Title_Cln, scales = "free_y", ncol = 3)
+ hist_posn_ratio
+
+
+ boxp_data <- filter(final_output,
+                     Position_Title_Cln %in% positions_n_5$Position_Title_Cln) %>%
+   arrange()
+
+ position_boxp <- ggplot(filter(final_output, Position_Title_Cln %in% positions_n_5$Position_Title_Cln),
+                                aes(x = Position_Title_Cln, y = comp_ratio)) +
+   geom_boxplot() +
+   coord_flip()
+
+
+ decile_table <- group_by(final_output, Position_Title_Cln) %>%
+   summarise(`10%` = quantile(comp_ratio, probs = .1),
+             `20%` = quantile(comp_ratio, probs = .2),
+             `30%` = quantile(comp_ratio, probs = .3),
+             `40%` = quantile(comp_ratio, probs = .4),
+             `50%` = quantile(comp_ratio, probs = .5),
+             `60%` = quantile(comp_ratio, probs = .6),
+             `70%` = quantile(comp_ratio, probs = .7),
+             `80%` = quantile(comp_ratio, probs = .8),
+             `90%` = quantile(comp_ratio, probs = .9),
+             IQR = IQR(comp_ratio),
+             mean_ratio = mean(comp_ratio),
+             mean_salary = mean(`FY FTE SALARY w/LONGEVITY`),
+             n = n())
+WriteToFile(decile_table, fname = "Position Title Decile Table.xlsx",
+            fpath = "./output/")
+
+# Add decile bin column
+decile_bin_names <- c("<.3", ".3 - .4", ".4 - .5", ".5 - .6", ".6 - .7", ".7 - .8",".8 - .9",".9 - 1.0","1.0 - 1.1","1.1 - 1.2", "1.2 - 1.3", "1.3 - 1.4", "1.4 - 1.5", ">1.5" )
+decile_bin_numbers <- c(-Inf, .3, .4, .5, .6, .7, .8, .9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, Inf)
+
+final_output <- AddBins(df = final_output,
+                data_col_name = "comp_ratio",
+                new_col_name = "market_bins(.1)",
+                bin_vector = decile_bin_numbers,
+                bin_names = decile_bin_names)
+
+
+
+
+# Add the JCAT, cupa and soc titles
+cupa_title_lu <- select(cupa_data,
+                        CUPA_CODE,
+                        CUPA_TITLE_CUPA)
+soc_title_lu <- select(soc_nat,
+                       OCC_CODE,
+                       OCC_TITLE_BLS_NATIONAL)
+
+jcat_title_lu <- read_xlsx("./Src/TableJCATXWalk.xlsx") %>%
+  select(JCAT_CODE, JCAT_TITLE)
+
+final_output <- left_join(final_output,
+                         cupa_title_lu,
+                         by = c("CUPA_UPDT" = "CUPA_CODE")) %>%
+  left_join(soc_title_lu,
+            by = c("SOC_UPDT" = "OCC_CODE")) %>%
+  left_join(jcat_title_lu,
+            by = c("JCAT_UPDT" = "JCAT_CODE"))
+
+
+new_fail_bool <-
+  final_output$comp_ratio >= hgh_ratio_threshold |
+  final_output$comp_ratio <= low_ratio_threshold
+new_fail <- final_output[new_fail_bool, ]
+
+output <- list(final_output, new_fail)
+WriteToFile(df = output, fpath = "./output/",
+            fname = "output data.xlsx")
+
+
+
+createSaraFile(final_output)
+createSaraFile <- function(df) {
+  df_out <- select(df,
+                   comp_ratio,
+                   MOST_RECENT_EVAL,
+                   PIDM,
+                   LAST_NAME,
+                   FIRST_NAME,
+                   JOB_TITLE,
+                   Position_Title_Cln,
+                   POSN,
+                   SUFF,
+                   MUS_CONTRACT,
+                   CURRENT_HIRE_DATE,
+                   JOB_START_DATE,
+                   DEPT_NAME,
+                   DIVISION,
+                   COLLEGE,
+                   JCAT_UPDT,
+                   JCAT_TITLE,
+                   SOC_UPDT,
+                   OCC_TITLE_BLS_NATIONAL,
+                   CUPA_UPDT,
+                   CUPA_TITLE_CUPA,
+                   `FY FTE SALARY w/LONGEVITY`,
+                   `FY FTE SALARY`,
+                   MONTHLY_RATE,
+                   `PROPORTION of BASE AVAILABLE FOR ADJUSTMENT`)
+  WriteToFile(df_out, fname = "UpdatedHRBPDataset20170919.xlsx", fpath = "./output/")
+}

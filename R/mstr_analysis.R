@@ -58,3 +58,38 @@ AdjustSalaries <- function(df,
 }
 
 
+BuildHRBPDataset <- function(df) {
+  require(dplyr)
+  df_orig <- df
+  df <- select(df,
+               `LONG SALARY/MARKET`,
+               EVAL_2017,
+               PIDM,
+               LAST_NAME,
+               FIRST_NAME,
+               JOB_TITLE,
+               POSITION_TITLE,
+               POSN,
+               SUFF,
+               MUS_CONTRACT,
+               `PEABARG Union`,
+               `Status Desc`,
+               CURRENT_HIRE_DATE,
+               JOB_START_DATE,
+               DEPT_NAME,
+               COLLEGE,
+               DIVISION,
+               JCAT,
+               JCAT_DESC,
+               JCAT_SOC,
+               NAT_JCAT_SOC_OCC_TITLE,
+               JCAT_CUPA,
+               JCAT_CUPA_TITLE)
+
+  return(df)
+}
+
+
+
+
+
